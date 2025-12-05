@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画美线上预约系统 (v2.1 精简版)</title>
+    
+    <!-- 1. 引入 Excel 库 -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <!-- 2. 引入 拖拽排序库 -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+    <style>
+        /* ================= 样式部分 ================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
+        .login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-box { background: white; border-radius: 20px; padding: 40px; width: 100%; max-width: 400px; box-shadow: var(--shadow); }
+        .login-header { text-align: center; margin-bottom: 30px; }
+        .login-header h1 { font-size: 1.8rem; color: var(--primary); margin-bottom: 8px; }
+        .login-header p { color: var(--text2); }
+        .app-container { display: none; padding: 20px; }
+        .app-container.show { display: block; }
+        .navbar { background: rgba(255,255,255,0.95); padding: 15px 25px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow); flex-wrap: wrap; gap: 15px; }
+        .navbar-brand { display: flex; align-items: center; gap: 10px; }
+        .navbar h1 { font-size: 1.3rem; color: var(--primary); }
+        .role-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; color: white; }
+        .role-superadmin { background: linear-gradient(135deg, #722ed1, #b37feb); }
+        .role-admin { background: linear-gradient(135deg, #fa8c16, #ffc53d); }
+        .role-operator { background: linear-gradient(135deg, #13c2c2, #5cdbd3); }
+        .nav-links { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .nav-links a { text-decoration: none; color: var(--text2); padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.3s; }
+        .nav-links a:hover, .nav-links a.active { background: var(--primary); color: white; }
+        .nav-links a.nav-admin { background: #fff3e0; color: #e65100; }
+        .nav-links a.nav-admin:hover, .nav-links a.nav-admin.active { background: #e65100; color: white; }
+        .nav-links a.nav-super { background: #f9f0ff; color: #722ed1; }
+        .nav-links a.nav-super:hover, .nav-links a.nav-super.active { background: #722ed1; color: white; }
+        .user-info { display: flex; align-items: center; gap: 10px; padding: 8px 15px; background: var(--bg); border-radius: 8px; }
+        .user-info span { font-size: 0.85rem; }
+        .btn-act { background: none; border: 1px solid var(--primary); color: var(--primary); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+        .btn-act:hover { background: var(--primary); color: white; }
+        .btn-logout { background: none; border: 1px solid var(--danger); color: var(--danger); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+        .btn-logout:hover { background: var(--danger); color: white; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .container-wide { max-width: 1400px; margin: 0 auto; }
+        .card { background: white; border-radius: 16px; padding: 25px; box-shadow: var(--shadow); margin-bottom: 20px; }
+        .card-header { text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid var(--bg); }
+        .card-header h2 { color: var(--primary); font-size: 1.5rem; margin-bottom: 6px; }
+        .card-header p { color: var(--text2); font-size: 0.9rem; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; }
+        .required { color: var(--danger); margin-left: 3px; }
+        .form-control { width: 100%; padding: 11px 14px; border: 2px solid var(--border); border-radius: 8px; font-size: 0.95rem; transition: all 0.3s; }
+        .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,144,217,0.1); }
+        .form-control.valid { border-color: var(--success); }
+        .form-control.invalid { border-color: var(--danger); }
+        .form-hint { font-size: 0.75rem; margin-top: 4px; color: var(--text2); }
+        .form-hint.error { color: var(--danger); }
+        .form-hint.success { color: var(--success); }
+        textarea.form-control { min-height: 70px; resize: vertical; }
+        
+        .sel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 8px; margin-top: 8px; }
+        .sel-grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
+        .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
+        
+        .sel-item.selected, .sel-item.selected:hover { border-color: var(--primary) !important; background: var(--primary) !important; color: white !important; }
+        .sel-item.selected * { color: rgba(255,255,255,0.95) !important; }
+        .sel-item.disabled { background: var(--bg); color: #ccc; cursor: not-allowed; }
+        
+        .date-day { font-size: 1.1rem; font-weight: bold; }
+        .date-wd { font-size: 0.7rem; color: var(--text2); margin-top: 3px; }
+        .slot-left { font-size: 0.7rem; color: var(--success); margin-top: 3px; }
+        
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), #667eea); color: white; }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74,144,217,0.4); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-purple { background: var(--purple); color: white; }
+        .btn-secondary { background: var(--bg); color: var(--text); }
+        .btn-info { background: #1890ff; color: white; }
+        .btn-full { width: 100%; }
+        .btn-sm { padding: 6px 8px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
+        .btn-group { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
+        .filter-bar { background: white; border-radius: 12px; padding: 18px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; box-shadow: var(--shadow); }
+        .filter-item { flex: 1; min-width: 140px; }
+        .filter-item label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--text2); font-size: 0.8rem; }
+        .filter-btn { flex: 0 0 auto; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-bottom: 20px; }
+        .stat-card { background: white; border-radius: 12px; padding: 18px; box-shadow: var(--shadow); }
+        .stat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .stat-title { font-size: 1rem; font-weight: 600; }
+        .stat-badge { padding: 3px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; }
+        .badge-ok { background: #e6fffb; color: #13c2c2; }
+        .badge-full { background: #fff1f0; color: var(--danger); }
+        .stat-nums { display: flex; gap: 15px; margin-bottom: 12px; }
+        .stat-num { text-align: center; flex: 1; }
+        .stat-val { font-size: 1.6rem; font-weight: bold; color: var(--primary); }
+        .stat-lbl { font-size: 0.75rem; color: var(--text2); }
+        .progress { height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-bottom: 12px; }
+        .progress-bar { height: 100%; border-radius: 3px; }
+        .prog-low { background: var(--success); }
+        .prog-mid { background: var(--warning); }
+        .prog-high { background: var(--danger); }
+        .tbl-wrap { overflow-x: auto; }
+        .data-tbl { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .data-tbl th, .data-tbl td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+        .data-tbl th { background: var(--bg); font-weight: 600; white-space: nowrap; }
+        .data-tbl tr:hover { background: rgba(74,144,217,0.03); }
+        .data-tbl td:last-child { white-space: nowrap; min-width: 220px; width: 1%; }
+        
+        .draggable-row { cursor: move; }
+        .draggable-row:active { background: #f0f5ff; }
+        .sort-handle { cursor: grab; color: #999; font-size: 1.2rem; padding: 0 5px; }
+        .sort-handle:hover { color: var(--primary); }
+        
+        .slot-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; }
+        .slot-tbl th, .slot-tbl td { padding: 6px; border-bottom: 1px solid var(--border); }
+        .slot-tbl th { background: var(--bg); }
+        .status { padding: 3px 8px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; }
+        .st-pending { background: #e6f7ff; color: #1890ff; }
+        .st-success { background: #f6ffed; color: var(--success); }
+        .st-cancel { background: #fff1f0; color: var(--danger); }
+        .st-ok { background: #e6fffb; color: #13c2c2; }
+        .st-warn { background: #fffbe6; color: var(--warning); }
+        .st-full { background: #fff1f0; color: var(--danger); }
+        .tag { display: inline-block; padding: 2px 6px; background: var(--bg); border-radius: 4px; font-size: 0.7rem; margin: 1px; }
+        .overview-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 18px; }
+        .overview-card { background: white; border-radius: 12px; padding: 16px; text-align: center; box-shadow: var(--shadow); }
+        .overview-val { font-size: 1.8rem; font-weight: bold; color: var(--primary); }
+        .overview-lbl { font-size: 0.8rem; color: var(--text2); margin-top: 4px; }
+        .checkbox-col { width: 40px; text-align: center; }
+        .cb-input { width: 16px; height: 16px; cursor: pointer; }
+        .modal-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s; padding: 20px; }
+        .modal-mask.show { opacity: 1; visibility: visible; }
+        .modal-box { background: white; border-radius: 16px; padding: 25px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; transform: translateY(-20px); transition: transform 0.3s; }
+        .modal-mask.show .modal-box { transform: translateY(0); }
+        .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+        .modal-head h3 { font-size: 1.15rem; }
+        .modal-close { width: 28px; height: 28px; border: none; background: var(--bg); border-radius: 50%; cursor: pointer; font-size: 1rem; }
+        .modal-close:hover { background: var(--danger); color: white; }
+        .modal-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .success-box { text-align: center; padding: 25px 15px; }
+        .success-icon { width: 65px; height: 65px; background: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; }
+        .success-icon svg { width: 32px; height: 32px; color: white; }
+        .success-title { font-size: 1.3rem; margin-bottom: 8px; }
+        .success-msg { color: var(--text2); margin-bottom: 20px; font-size: 0.9rem; }
+        .info-box { background: var(--bg); border-radius: 12px; padding: 18px; text-align: left; margin-bottom: 20px; }
+        .info-box h4 { margin-bottom: 12px; font-size: 0.95rem; }
+        .info-row { display: flex; padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 0.9rem; }
+        .info-row:last-child { border-bottom: none; }
+        .info-lbl { width: 80px; color: var(--text2); }
+        .info-val { flex: 1; font-weight: 500; }
+        .share-box { background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 12px; padding: 25px; color: white; text-align: center; margin-bottom: 18px; }
+        .share-box h3 { margin-bottom: 18px; font-size: 1.1rem; }
+        .qr-wrap { background: white; padding: 12px; border-radius: 12px; display: inline-block; margin-bottom: 12px; }
+        .link-box { background: rgba(255,255,255,0.2); border-radius: 8px; padding: 8px; display: flex; gap: 8px; margin-top: 12px; }
+        .link-box input { flex: 1; border: none; padding: 8px; border-radius: 6px; font-size: 0.8rem; }
+        .user-role { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .ur-super { background: #f9f0ff; color: #722ed1; }
+        .ur-admin { background: #fff7e6; color: #fa8c16; }
+        .ur-op { background: #e6fffb; color: #13c2c2; }
+        
+        /* 优化时段选择 UI */
+        .slot-config-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+        .slot-cfg-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); }
+        .slot-cfg-item:last-child { border-bottom: none; }
+        .slot-cfg-item:hover { background: var(--bg); }
+        .slot-cfg-label { font-weight: 600; font-size: 0.9rem; color: var(--primary); width: 120px; }
+        .slot-cfg-opts { display: flex; gap: 15px; }
+        .slot-radio { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; cursor: pointer; }
+        .slot-radio input { accent-color: var(--primary); }
+
+        .empty-box { text-align: center; padding: 40px 15px; color: var(--text2); }
+        .empty-box h3 { color: var(--text); margin-bottom: 6px; font-size: 1rem; }
+        .tip-box { background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 8px; padding: 12px 16px; margin-bottom: 15px; font-size: 0.85rem; color: #1890ff; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .perm-hide { display: none !important; }
+        
+        /* 复制相关样式 */
+        .copy-cell { cursor: pointer; position: relative; transition: color 0.2s; }
+        .copy-cell:hover { color: var(--primary); background: rgba(74,144,217,0.05); }
+        .copy-cell:active { transform: scale(0.98); }
+        .copy-cell::after { content: '点击复制'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; opacity: 0; pointer-events: none; transition: opacity 0.2s; white-space: nowrap; }
+        .copy-cell:hover::after { opacity: 0.8; }
+        
+        /* Toast 提示 */
+        .toast-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.75); color: white; padding: 12px 24px; border-radius: 8px; font-size: 0.95rem; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .toast-box.show { opacity: 1; }
+
+        /* 新增：排除日期标签样式 */
+        .tag-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; min-height: 30px; }
+        .exclude-tag { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; }
+        .exclude-tag span { cursor: pointer; font-weight: bold; padding: 0 4px; }
+        .exclude-tag span:hover { background: rgba(255,0,0,0.1); border-radius: 50%; }
+
+        @media (max-width: 768px) {
+            .navbar { padding: 12px; }
+            .navbar h1 { font-size: 1.1rem; }
+            .nav-links a { padding: 6px 10px; font-size: 0.75rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .sel-grid { grid-template-columns: repeat(3, 1fr); }
+            .filter-bar { flex-direction: column; }
+            .filter-item { width: 100%; }
+            .overview-row { grid-template-columns: repeat(2, 1fr); }
+            .card { padding: 18px; }
+            .user-info { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Toast 提示框 -->
+<div id="toastBox" class="toast-box"></div>
+
+<!-- 登录页面 -->
+<div class="login-page" id="loginPage">
+    <div class="login-box">
+        <div class="login-header"><h1>🏥 画美线上预约系统</h1></p></div>
+        <form onsubmit="doLogin(event)">
+            <div class="form-group"><label>用户名</label><input type="text" class="form-control" id="loginUser" placeholder="请输入用户名" required></div>
+            <div class="form-group"><label>密码</label><input type="password" class="form-control" id="loginPwd" placeholder="预约人员可留空"></div>
+            <button type="submit" class="btn btn-primary btn-full">登 录</button>
+        </form>
+    </div>
+</div>
+
+<!-- 主应用 -->
+<div class="app-container" id="appContainer">
+    <nav class="navbar">
+        <div class="navbar-brand"><h1>🏥 画美线上预约系统</h1><span class="role-badge" id="navRoleBadge"></span></div>
+        <div class="nav-links" id="navLinks">
+            <a class="active" onclick="showPage('booking',this)">预约挂号</a>
+            <a onclick="showPage('dashboard',this)">预约看板</a>
+            <a onclick="showPage('records',this)">预约记录</a>
+            <a class="nav-admin" onclick="showPage('config',this)" data-perm="config">系统配置</a>
+            <a class="nav-admin" onclick="showPage('share',this)" data-perm="share">分享管理</a>
+            <a class="nav-super" onclick="showPage('users',this)" data-perm="users">用户管理</a>
+        </div>
+        <div class="user-info">
+            <span>👤 <span id="navUserName"></span></span>
+            <button class="btn-act" onclick="openPwdModal()">修改密码</button>
+            <button class="btn-logout" onclick="doLogout()">退出</button>
+        </div>
+    </nav>
+
+    <!-- 1. 预约挂号 (已移除预约人输入框) -->
+    <div id="page-booking" class="page active">
+        <div class="container">
+            <div class="card" id="formCard">
+                <div class="card-header"><h2>📋 在线预约</h2><p>请填写信息完成预约</p></div>
+                <form id="bookingForm">
+                    <div class="form-group"><label>顾客姓名 <span class="required">*</span></label><input type="text" class="form-control" id="inpName" required></div>
+                    <div class="form-group"><label>联系电话 <span class="required">*</span></label><input type="tel" class="form-control" id="inpPhone" maxlength="11" placeholder="请输入11位手机号码" required><div class="form-hint" id="phoneHint">请输入11位中国大陆手机号码</div></div>
+                    <div class="form-group"><label>预约项目 <span class="required">*</span></label><select class="form-control" id="selProject" required><option value="">加载中...</option></select></div>
+                    <div class="form-group" id="modeGroup" style="display:none;"><label>选择方式</label><div class="sel-grid sel-grid-2"><div class="sel-item" onclick="pickMode('date')">📅 先选日期</div><div class="sel-item" onclick="pickMode('time')">🕐 先选时段</div></div></div>
+                    <div class="form-group" id="dateGroup" style="display:none;"><label>预约日期 <span class="required">*</span></label><div class="sel-grid" id="dateGrid"></div></div>
+                    <div class="form-group" id="timeGroup" style="display:none;"><label>预约时段 <span class="required">*</span></label><div class="sel-grid" id="timeGrid"></div></div>
+                    
+                    <!-- 🟢 已移除：预约人输入框 -->
+                    
+                    <div class="form-group"><label>备注</label><textarea class="form-control" id="inpRemark"></textarea></div>
+                    <button type="submit" class="btn btn-primary btn-full" id="btnSubmit" disabled>确认预约</button>
+                </form>
+            </div>
+            <div class="card" id="successCard" style="display:none;">
+                <div class="success-box">
+                    <div class="success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                    <h2 class="success-title">预约成功！</h2><p class="success-msg">请按时前来就诊</p>
+                    <div class="info-box"><h4>预约信息</h4><div class="info-row"><span class="info-lbl">顾客姓名</span><span class="info-val" id="cfmName"></span></div><div class="info-row"><span class="info-lbl">联系电话</span><span class="info-val" id="cfmPhone"></span></div><div class="info-row"><span class="info-lbl">预约项目</span><span class="info-val" id="cfmProject"></span></div><div class="info-row"><span class="info-lbl">预约日期</span><span class="info-val" id="cfmDate"></span></div><div class="info-row"><span class="info-lbl">预约时段</span><span class="info-val" id="cfmTime"></span></div></div>
+                    <button class="btn btn-primary btn-full" onclick="resetBooking()">继续预约</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 预约看板 -->
+    <div id="page-dashboard" class="page">
+        <div class="container-wide">
+            <div class="filter-bar">
+                <div class="filter-item"><label>📅 选择日期</label><input type="date" class="form-control" id="dashDate"></div>
+                <div class="filter-item"><label>🕐 选择时段</label><select class="form-control" id="dashSlot"><option value="">全部时段</option></select></div>
+                <div class="filter-btn"><button class="btn btn-primary" onclick="loadDashboard()">🔄 刷新</button></div>
+            </div>
+            <div class="stats-grid" id="dashStats"></div>
+        </div>
+    </div>
+
+    <!-- 3. 预约记录 (表格已精简) -->
+    <div id="page-records" class="page">
+        <div class="container-wide">
+            <div class="tip-box" id="operatorTip" style="display:none;">💡 您当前是预约人员身份，只能查看自己创建的预约记录</div>
+            <div class="overview-row" id="recOverview"></div>
+            <div class="filter-bar">
+                <div class="filter-item"><label>预约日期 (起)</label><input type="date" class="form-control" id="recStart"></div>
+                <div class="filter-item"><label>预约日期 (止)</label><input type="date" class="form-control" id="recEnd"></div>
+                <div class="filter-item"><label>创建日期 (起)</label><input type="date" class="form-control" id="createStart"></div>
+                <div class="filter-item"><label>创建日期 (止)</label><input type="date" class="form-control" id="createEnd"></div>
+                <div class="filter-item"><label>项目</label><select class="form-control" id="recProject"><option value="">全部</option></select></div>
+                <div class="filter-item"><label>状态</label><select class="form-control" id="recStatus"><option value="">全部</option><option value="confirmed">待确认</option><option value="success">预约成功</option><option value="cancelled">已取消</option></select></div>
+                <div class="filter-btn"><button class="btn btn-primary" onclick="loadRecords()">🔍 查询</button></div>
+                <div class="filter-btn" data-perm="export"><button type="button" class="btn btn-success" onclick="exportExcel()">📊 导出Excel</button></div>
+                <div class="filter-btn" data-perm="batchdel"><button class="btn btn-danger" onclick="batchDelete()">🗑️ 批量删除</button></div>
+                
+                <!-- 新增：仅超管可见的手机号开关 -->
+                <div class="filter-btn perm-hide" data-perm="reveal_phone">
+                    <button id="btnPhoneToggle" class="btn btn-secondary" onclick="togglePhoneMask()">🙈 已隐藏手机号</button>
+                </div>
+            </div>
+            <div class="card"><div class="card-header"><h2>📋 预约记录详情</h2><p id="recSubtitle">-</p></div><div class="tbl-wrap" id="recTable"></div></div>
+        </div>
+    </div>
+
+    <!-- 4. 系统配置 (修复：支持拖拽+批量更新+新规则+黑名单) -->
+    <div id="page-config" class="page">
+        <div class="container-wide">
+            <div class="card">
+                <div class="card-header"><h2>⚙️ 项目配置管理</h2><p>可拖拽调整顺序，或使用上下箭头</p></div>
+                <div class="tip-box">💡 提示：鼠标按住表格行可直接拖动排序。操作后请耐心等待“保存完毕”提示。</div>
+                <div class="btn-group" style="margin-bottom:18px;">
+                    <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
+                    <button type="button" class="btn btn-purple" onclick="downloadConfigTemplate()">📥 下载项目模板</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileConfigImport').click()">📤 导入项目配置</button>
+                    <input type="file" id="fileConfigImport" accept=".xlsx,.xls" style="display:none" onchange="importConfigs(event)">
+                </div>
+                <div class="tbl-wrap" id="cfgTable"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 5. 用户管理 (升级：搜索+部门+唯一性校验) -->
+    <div id="page-users" class="page">
+        <div class="container-wide">
+            <div class="card">
+                <div class="card-header"><h2>👥 用户管理</h2><p>管理系统用户</p></div>
+                
+                <!-- 🟢 新增：用户搜索栏 -->
+                <div class="filter-bar" style="box-shadow:none; padding:0; margin-bottom:15px; background:none;">
+                     <div class="filter-item"><label>🔍 搜索用户 (姓名/用户名/部门)</label><input type="text" class="form-control" id="userSearch" placeholder="输入关键字..." oninput="loadUserTable()"></div>
+                </div>
+
+                <div class="btn-group" style="margin-bottom:18px;">
+                    <button class="btn btn-success" onclick="openUserModal()">➕ 添加用户</button>
+                    <button type="button" class="btn btn-purple" onclick="downloadUserTemplate()">📥 下载用户模板</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileUserImport').click()">📤 导入用户</button>
+                    <input type="file" id="fileUserImport" accept=".xlsx,.xls" style="display:none" onchange="importUsers(event)">
+                </div>
+                <div class="tbl-wrap" id="userTable"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 6. 分享 -->
+    <div id="page-share" class="page">
+        <div class="container">
+            <div class="card">
+                <div class="card-header"><h2>🔗 分享预约链接</h2><p>生成二维码供用户扫码预约</p></div>
+                <div class="share-box"><h3>📱 用户预约二维码</h3><div class="qr-wrap"><div id="qrcode"></div></div><div class="link-box"><input type="text" id="userLink" readonly><button class="btn btn-sm" style="background:#fff;color:#333;" onclick="copyLink('userLink')">📋 复制</button></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 模态框 -->
+<div class="modal-mask" id="cfgModal">
+    <div class="modal-box">
+        <div class="modal-head"><h3 id="cfgModalTitle">添加项目</h3><button class="modal-close" onclick="hideModal('cfgModal')">✕</button></div>
+        <form id="cfgForm" onsubmit="saveCfg(event)">
+            <input type="hidden" id="cfgId">
+            <div class="form-group"><label>项目名称 <span class="required">*</span></label><input type="text" class="form-control" id="cfgName" required></div>
+            <div class="form-group"><label>可预约天数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgDays" min="1" max="90" required><div class="form-hint">规则：从明天起算，共多少天 (例如设为10，即开放明天起共10天)</div></div>
+            
+            <!-- 新增：排除特定日期 -->
+            <div class="form-group" style="background: #fffbe6; padding: 10px; border-radius: 8px; border:1px solid #ffe58f;">
+                <label style="color:#faad14;">⛔ 排除特定日期 (特殊情况不放号)</label>
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <input type="date" id="cfgExcludeInput" class="form-control">
+                    <button type="button" class="btn btn-warning" onclick="addExcludeDate()">添加排除</button>
+                </div>
+                <div id="cfgExcludeList" class="tag-container"></div>
+                <div class="form-hint">在此列表中的日期，即使用户在“可预约天数”范围内也无法预约。</div>
+            </div>
+
+            <div class="form-group"><label>每时段人数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgCap" min="1" max="100" required></div>
+            <div class="form-group"><label>可预约时段 (09:00 - 20:00) <span class="required">*</span></label>
+                <div class="tip-box" style="padding:6px 12px;margin-bottom:8px;">✅ 请在下方勾选开放的时段，未勾选即为排除</div>
+                <div id="cfgSlots" class="slot-config-list"></div>
+            </div>
+            <div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('cfgModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div>
+        </form>
+    </div>
+</div>
+
+<!-- 用户模态框：新增部门字段 -->
+<div class="modal-mask" id="userModal">
+    <div class="modal-box">
+        <div class="modal-head"><h3 id="userModalTitle">添加用户</h3><button class="modal-close" onclick="hideModal('userModal')">✕</button></div>
+        <form id="userForm" onsubmit="saveUser(event)">
+            <input type="hidden" id="userId">
+            <div class="form-group"><label>用户名 (登录账号) <span class="required">*</span></label><input type="text" class="form-control" id="userUsername" required><div class="form-hint">必须唯一，不可重复</div></div>
+            <div class="form-group"><label>姓名 (显示名称) <span class="required">*</span></label><input type="text" class="form-control" id="userName" required></div>
+            
+            <!-- 🟢 新增：部门字段 -->
+            <div class="form-group"><label>部门</label><input type="text" class="form-control" id="userDept" placeholder="例如：咨询部、前台"></div>
+            
+            <div class="form-group"><label>密码</label><input type="password" class="form-control" id="userPwd"></div>
+            <div class="form-group"><label>角色 <span class="required">*</span></label><select class="form-control" id="userRole" required><option value="operator">预约人员</option><option value="admin">管理员</option><option value="superadmin">超级管理员</option></select></div>
+            <div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('userModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-mask" id="superPwdModal"><div class="modal-box" style="max-width:360px;"><div class="modal-head"><h3>🔐 超管验证</h3><button class="modal-close" onclick="hideModal('superPwdModal')">✕</button></div><form onsubmit="verifySuperPwd(event)"><div class="form-group"><label>请输入超级管理员密码</label><input type="password" class="form-control" id="superPwdInput" required></div><div class="modal-foot" style="border:none;padding-top:0;"><button type="button" class="btn btn-secondary" onclick="hideModal('superPwdModal')">取消</button><button type="submit" class="btn btn-purple">确认</button></div></form></div></div>
+<div class="modal-mask" id="pwdModal"><div class="modal-box" style="max-width:400px;"><div class="modal-head"><h3>🔐 修改密码</h3><button class="modal-close" onclick="hideModal('pwdModal')">✕</button></div><form onsubmit="doChangePwd(event)"><div class="form-group"><label>原密码 <span class="required">*</span></label><input type="password" class="form-control" id="pwdOld" required></div><div class="form-group"><label>新密码 <span class="required">*</span></label><input type="password" class="form-control" id="pwdNew" minlength="4" required></div><div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('pwdModal')">取消</button><button type="submit" class="btn btn-success">确认修改</button></div></form></div></div>
+
+<script>
+// ==================== 🟢 维格表(Vika) 配置 🟢 ====================
+const VIKA_TOKEN  = "uskKIVNPRELxHGFCc9PnQZb";
+const DST_RECORDS = "dstgPwahY3fU31uAMm"; 
+const DST_CONFIGS = "dst9KJZJj8nE2aVtmL"; 
+const DST_USERS   = "dstaU2jlgkPNkpDyfE"; 
+
+const STATUS_MAP = { 'confirmed': '待确认', 'success': '预约成功', 'cancelled': '已取消' };
+
+// ==================== 工具函数 ====================
+function showToast(msg) {
+    const box = document.getElementById('toastBox');
+    box.textContent = msg;
+    box.classList.add('show');
+    setTimeout(() => { box.classList.remove('show'); }, 2000);
+}
+
+function copyText(txt) {
+    if(!txt || txt === '-') return;
+    navigator.clipboard.writeText(txt).then(() => {
+        showToast('已复制');
+    }).catch(() => {
+        showToast('复制失败');
+    });
+}
+
+// ==================== Vika DB 封装层 ====================
+const VikaDB = {
+    async request(dstId, method = 'GET', data = null, recordId = null) {
+        let url = `https://api.vika.cn/fusion/v1/datasheets/${dstId}/records`;
+        if (method === 'GET') url += '?pageNum=1&pageSize=1000';
+        const options = { method, headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' } };
+        if (data) {
+            if (method === 'POST') options.body = JSON.stringify({ records: [{ fields: data }] });
+            else if (method === 'PATCH') options.body = JSON.stringify({ records: [{ recordId: recordId, fields: data }] });
+        }
+        if (method === 'DELETE') { url += `?recordIds=${recordId}`; delete options.body; }
+        const res = await fetch(url, options).then(r => r.json());
+        if (!res.success) { console.error("Vika Error:", res); throw new Error(res.message); }
+        return res.data ? res.data.records : [];
+    },
+    async batchUpdate(dstId, records) {
+        let url = `https://api.vika.cn/fusion/v1/datasheets/${dstId}/records`;
+        const options = { 
+            method: 'PATCH', 
+            headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ records: records })
+        };
+        const res = await fetch(url, options).then(r => r.json());
+        if (!res.success) { console.error("Vika Error:", res); throw new Error(res.message); }
+        return res.data;
+    },
+    async getUsers() { return (await this.request(DST_USERS)).map(r => ({ ...r.fields, id: r.recordId })); },
+    
+    // 🟢 修改：保存用户时带上部门信息
+    async saveUser(u) {
+        const fields = { username: u.username, name: u.name, role: u.role, department: u.department };
+        if(u.password) fields.password = u.password;
+        u.id ? await this.request(DST_USERS, 'PATCH', fields, u.id) : await this.request(DST_USERS, 'POST', fields);
+    },
+    async deleteUser(id) { await this.request(DST_USERS, 'DELETE', null, id); },
+    async getConfigs() {
+        const list = (await this.request(DST_CONFIGS)).map(r => ({ 
+            ...r.fields, id: r.recordId, 
+            slots: r.fields.slots ? String(r.fields.slots).split(/[,，]/).map(s=>s.trim()).filter(s=>s) : [],
+            excludedDates: r.fields.excludedDates ? String(r.fields.excludedDates).split(',') : [],
+            sort: (r.fields.sort === undefined || r.fields.sort === null) ? 999 : Number(r.fields.sort)
+        }));
+        return list.sort((a,b) => a.sort - b.sort);
+    },
+    async saveConfig(c) {
+        const fields = { 
+            name: c.name, 
+            days: parseInt(c.days), 
+            capacity: parseInt(c.capacity), 
+            slots: c.slots.join(','),
+            excludedDates: c.excludedDates.join(',')
+        };
+        if(c.sort !== undefined) fields.sort = c.sort;
+        c.id ? await this.request(DST_CONFIGS, 'PATCH', fields, c.id) : await this.request(DST_CONFIGS, 'POST', fields);
+    },
+    async deleteConfig(id) { await this.request(DST_CONFIGS, 'DELETE', null, id); },
+    async getRecords(filter) {
+        let list = (await this.request(DST_RECORDS)).map(r => ({ ...r.fields, id: r.recordId, createdAt: r.createdAt }));
+        if(filter.project) list = list.filter(r => r.project === filter.project);
+        if(filter.status) list = list.filter(r => r.status === filter.status);
+        if(filter.start) list = list.filter(r => r.date >= filter.start);
+        if(filter.end) list = list.filter(r => r.date <= filter.end);
+        if(filter.createStart) { const d = new Date(filter.createStart).setHours(0,0,0,0); list = list.filter(r => r.createdAt >= d); }
+        if(filter.createEnd) { const d = new Date(filter.createEnd).setHours(23,59,59,999); list = list.filter(r => r.createdAt <= d); }
+        return list.sort((a,b) => b.createdAt - a.createdAt);
+    },
+    async addRecord(r) {
+        // ⭐ 关键点：将 operator 字段强制设为 currentUser.name
+        // createdBy 也设为姓名
+        const fields = { ...r, status: 'confirmed', createdBy: currentUser.name, operator: currentUser.name };
+        const saved = (await this.request(DST_RECORDS, 'POST', fields))[0];
+        return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
+    },
+    async updateRecordStatus(id, status) { await this.request(DST_RECORDS, 'PATCH', { status: status }, id); },
+    async updateRecordRemark(id, remark) { await this.request(DST_RECORDS, 'PATCH', { remark: remark }, id); },
+    async deleteRecord(id) { await this.request(DST_RECORDS, 'DELETE', null, id); },
+    async batchDeleteRecords(ids) { await this.request(DST_RECORDS, 'DELETE', null, ids.join(',')); },
+    async fetchActiveRecords(pName) {
+        recordsCache = (await this.getRecords({})).filter(r => r.project === pName && r.status !== 'cancelled');
+    },
+    countBookedLocal(name, date, slot) { return recordsCache.filter(r => r.project===name && r.date===date && r.slot===slot).length; },
+    async canBookAsync(name, date, slot) {
+        await this.fetchActiveRecords(name);
+        const count = this.countBookedLocal(name, date, slot);
+        const cfg = (await this.getConfigs()).find(c => c.name === name);
+        if(!cfg) return {ok:false, msg:'项目不存在'};
+        return { ok: (cfg.capacity - count) > 0, msg: '已满' };
+    },
+    async getAvailDates(cfg) {
+        const dates = []; const today = new Date();
+        const blacklist = cfg.excludedDates || [];
+        for(let i=1; i<=cfg.days; i++) { 
+            const d = new Date(today); 
+            d.setDate(today.getDate()+i); 
+            const dateStr = d.toISOString().split('T')[0];
+            if (blacklist.includes(dateStr)) continue;
+            dates.push(dateStr); 
+        }
+        return dates;
+    },
+    getWeekday(s) { return ['日','一','二','三','四','五','六'][new Date(s).getDay()]; }
+};
+
+// ==================== 全局状态 ====================
+var currentUser = null; var superPwdCallback = null; var recordsCache = []; 
+let currentExcludedDates = [];
+let isPhoneRevealed = false; // 默认不显示完整手机号
+
+const PERMS = {
+    // 🟢 新增 reveal_phone 权限
+    superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','confirm','cancel','reveal_phone'],
+    admin: ['booking','dashboard','records','config','share','confirm','cancel'],
+    operator: ['booking','dashboard','records'] 
+};
+function hasPerm(perm) { if (!currentUser) return false; return PERMS[currentUser.role]?.includes(perm) || false; }
+function applyPerms() {
+    document.querySelectorAll('[data-perm]').forEach(el => el.classList.toggle('perm-hide', !hasPerm(el.dataset.perm)));
+    document.getElementById('navRoleBadge').textContent = {superadmin:'超级管理员',admin:'管理员',operator:'预约人员'}[currentUser.role];
+    document.getElementById('navUserName').textContent = currentUser.name;
+    document.getElementById('operatorTip').style.display = currentUser.role === 'operator' ? 'block' : 'none';
+}
+function isValidPhone(phone) { return /^1[3-9]\d{9}$/.test(phone); }
+function getPhoneStatus(phone) {
+    if (!phone) return { valid: false, msg: '请输入', class: '' };
+    if (!/^\d{11}$/.test(phone)) return { valid: false, msg: '需11位数字', class: 'error' };
+    if (!isValidPhone(phone)) return { valid: false, msg: '格式不正确', class: 'error' };
+    return { valid: true, msg: 'OK', class: 'success' };
+}
+
+async function doLogin(e) {
+    e.preventDefault(); const btn = e.target.querySelector('button'); const orgText = btn.textContent; btn.disabled = true; btn.textContent = '登录中...';
+    try {
+        const users = await VikaDB.getUsers();
+        const u = users.find(x => x.username === document.getElementById('loginUser').value.trim());
+        if (!u) throw new Error('用户不存在');
+        if (u.role !== 'operator' || u.password) { if (u.password !== document.getElementById('loginPwd').value) throw new Error('密码错误'); }
+        currentUser = u; sessionStorage.setItem('currentUser', JSON.stringify(u));
+        document.getElementById('loginPage').style.display = 'none'; document.getElementById('appContainer').classList.add('show'); applyPerms(); initBooking();
+    } catch (err) { alert(err.message); } finally { btn.disabled = false; btn.textContent = orgText; }
+}
+function doLogout() { currentUser = null; sessionStorage.removeItem('currentUser'); document.getElementById('appContainer').classList.remove('show'); document.getElementById('loginPage').style.display = 'flex'; }
+function checkSession() { const saved = sessionStorage.getItem('currentUser'); if (saved) { currentUser = JSON.parse(saved); document.getElementById('loginPage').style.display = 'none'; document.getElementById('appContainer').classList.add('show'); applyPerms(); initBooking(); } }
+function showPage(name, el) {
+    if (!hasPerm(name) && !['booking','dashboard','records'].includes(name)) { alert('无权访问'); return; }
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    if (el) el.classList.add('active');
+    if (name === 'booking') initBooking(); if (name === 'dashboard') loadDashboard(); if (name === 'records') loadRecords(); if (name === 'config') loadCfgTable(); if (name === 'share') initShare(); if (name === 'users') loadUserTable();
+}
+
+// 🟢 修改密码逻辑
+function openPwdModal() { document.getElementById('pwdOld').value=''; document.getElementById('pwdNew').value=''; document.getElementById('pwdModal').classList.add('show'); }
+async function doChangePwd(e) {
+    e.preventDefault();
+    const oldP = document.getElementById('pwdOld').value;
+    const newP = document.getElementById('pwdNew').value;
+    const btn = e.target.querySelector('button[type=submit]');
+    if(currentUser.password && currentUser.password !== oldP) { alert('原密码错误'); return; }
+    btn.disabled = true; btn.textContent = '修改中...';
+    try {
+        await VikaDB.saveUser({ ...currentUser, password: newP });
+        currentUser.password = newP;
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        alert('密码修改成功');
+        hideModal('pwdModal');
+    } catch(err) { alert('修改失败：' + err.message); } finally { btn.disabled = false; btn.textContent = '确认修改'; }
+}
+
+// ==================== 🟢 预约模块 ====================
+let bookState = { project: null, mode: null, date: null, slot: null, cfg: null };
+
+async function initBooking() {
+    const sel = document.getElementById('selProject');
+    if (sel.options.length <= 1) {
+        sel.innerHTML = '<option>加载中...</option>';
+        try { const cfgs = await VikaDB.getConfigs(); sel.innerHTML = '<option value="">请选择预约项目</option>'; cfgs.forEach(c => sel.innerHTML += `<option value="${c.name}">${c.name}</option>`); } catch(e) { sel.innerHTML = '<option>加载失败</option>'; }
+    }
+    resetBooking();
+}
+
+document.getElementById('selProject').addEventListener('change', async function() {
+    bookState = { project: null, mode: null, date: null, slot: null, cfg: null };
+    document.getElementById('modeGroup').style.display = 'none';
+    document.getElementById('dateGroup').style.display = 'none';
+    document.getElementById('timeGroup').style.display = 'none';
+    if (this.value) {
+        const cfgs = await VikaDB.getConfigs();
+        bookState.cfg = cfgs.find(c => c.name === this.value);
+        bookState.project = this.value;
+        await VikaDB.fetchActiveRecords(this.value);
+        document.getElementById('modeGroup').style.display = 'block';
+    }
+    checkSubmit();
+});
+
+function pickMode(mode) {
+    bookState.mode = mode;
+    bookState.date = null;
+    bookState.slot = null;
+    document.querySelectorAll('#modeGroup .sel-item').forEach((item, idx) => {
+        item.classList.toggle('selected', (mode === 'date' && idx === 0) || (mode === 'time' && idx === 1));
+    });
+    if (mode === 'date') {
+        document.getElementById('dateGroup').style.display = 'block';
+        document.getElementById('timeGroup').style.display = 'none';
+        renderDates(null);
+    } else {
+        document.getElementById('timeGroup').style.display = 'block';
+        document.getElementById('dateGroup').style.display = 'none';
+        renderSlots(null);
+    }
+    checkSubmit();
+}
+
+async function renderDates(filterSlot) {
+    const cfg = bookState.cfg;
+    const dates = await VikaDB.getAvailDates(cfg);
+    let html = '';
+    dates.forEach(dt => {
+        let avail = 0;
+        if (filterSlot) avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, filterSlot);
+        else cfg.slots.forEach(s => avail += cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, s));
+        const full = avail <= 0;
+        const sel = bookState.date === dt;
+        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}"><div class="date-day">${new Date(dt).getDate()}</div><div class="date-wd">周${VikaDB.getWeekday(dt)}</div><div class="slot-left">${full?'已满':'余'+avail}</div></div>`;
+    });
+    document.getElementById('dateGrid').innerHTML = html;
+}
+
+async function renderSlots(filterDate) {
+    const cfg = bookState.cfg;
+    let html = '';
+    cfg.slots.forEach(s => {
+        let avail = 0;
+        if (filterDate) avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, filterDate, s);
+        else avail = 999;
+        const full = avail <= 0;
+        const sel = bookState.slot === s;
+        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}"><div>${s}</div><div class="slot-left">${full?'已满':(filterDate ? '余'+avail : '可选')}</div></div>`;
+    });
+    document.getElementById('timeGrid').innerHTML = html;
+}
+
+function pickDate(dt) {
+    bookState.date = dt;
+    if (bookState.mode === 'date') {
+        document.getElementById('timeGroup').style.display = 'block';
+        renderSlots(dt);
+        renderDates(null);
+    } else {
+        renderDates(bookState.slot);
+    }
+    checkSubmit();
+}
+
+function pickSlot(s) {
+    bookState.slot = s;
+    if (bookState.mode === 'time') {
+        document.getElementById('dateGroup').style.display = 'block';
+        renderDates(s);
+        renderSlots(null);
+    } else {
+        renderSlots(bookState.date);
+    }
+    checkSubmit();
+}
+
+function checkSubmit() {
+    const name = document.getElementById('inpName').value.trim();
+    const phone = document.getElementById('inpPhone').value.trim();
+    const ps = getPhoneStatus(phone);
+    document.getElementById('inpPhone').className = 'form-control ' + (phone ? (ps.valid?'valid':'invalid') : '');
+    document.getElementById('phoneHint').textContent = ps.msg;
+    
+    // ⭐ 修改：不再校验 inpOperator
+    const canSubmit = name.length>=2 && ps.valid && bookState.project && bookState.date && bookState.slot;
+    document.getElementById('btnSubmit').disabled = !canSubmit;
+}
+
+document.getElementById('inpName').addEventListener('input', checkSubmit);
+document.getElementById('inpPhone').addEventListener('input', function() { 
+    this.value = this.value.replace(/[^\d]/g, ''); 
+    if(this.value.length > 11) this.value = this.value.slice(0, 11);
+    checkSubmit(); 
+});
+
+document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmit');
+    btn.disabled = true; btn.textContent = '提交中...';
+    try {
+        const chk = await VikaDB.canBookAsync(bookState.project, bookState.date, bookState.slot);
+        if (!chk.ok) throw new Error(chk.msg || '预约失败');
+        const rec = {
+            name: document.getElementById('inpName').value.trim(),
+            phone: document.getElementById('inpPhone').value.trim(),
+            project: bookState.project,
+            date: bookState.date,
+            slot: bookState.slot,
+            // 🟢 自动填充：operator 为当前用户的姓名
+            operator: currentUser.name,
+            remark: document.getElementById('inpRemark').value.trim()
+        };
+        const saved = await VikaDB.addRecord(rec);
+        document.getElementById('cfmName').textContent = saved.name;
+        document.getElementById('cfmPhone').textContent = saved.phone;
+        document.getElementById('cfmProject').textContent = saved.project;
+        document.getElementById('cfmDate').textContent = saved.date + ' 周' + VikaDB.getWeekday(saved.date);
+        document.getElementById('cfmTime').textContent = saved.slot;
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('successCard').style.display = 'block';
+    } catch(err) { alert(err.message); } finally { btn.disabled = false; btn.textContent = '确认预约'; }
+});
+
+function resetBooking() {
+    document.getElementById('bookingForm').reset();
+    bookState = { project: null, mode: null, date: null, slot: null, cfg: null };
+    document.getElementById('modeGroup').style.display = 'none';
+    document.getElementById('dateGroup').style.display = 'none';
+    document.getElementById('timeGroup').style.display = 'none';
+    document.getElementById('formCard').style.display = 'block';
+    document.getElementById('successCard').style.display = 'none';
+    document.querySelectorAll('#modeGroup .sel-item').forEach(x => x.classList.remove('selected'));
+    checkSubmit();
+}
+
+// ==================== 仪表盘 ====================
+async function loadDashboard() {
+    const date = document.getElementById('dashDate').value || new Date(new Date().getTime() + 86400000).toISOString().split('T')[0]; // Default tomorrow
+    if(!document.getElementById('dashDate').value) document.getElementById('dashDate').value = date;
+    const slot = document.getElementById('dashSlot').value;
+    const div = document.getElementById('dashStats'); div.innerHTML = '<p>加载中...</p>';
+    const all = await VikaDB.getRecords({ start:date, end:date });
+    const dayRecords = all.filter(r => r.date === date && r.status !== 'cancelled');
+    const cfgs = await VikaDB.getConfigs();
+    const allSlots = new Set();
+    cfgs.forEach(c => c.slots.forEach(s => allSlots.add(s)));
+    const slotSel = document.getElementById('dashSlot');
+    if(slotSel.options.length <= 1) {
+        Array.from(allSlots).sort().forEach(s => slotSel.innerHTML += `<option value="${s}">${s}</option>`);
+    }
+    let html = '';
+    cfgs.forEach(cfg => {
+        let total = 0, booked = 0, slotRows = '';
+        (slot ? (cfg.slots.includes(slot) ? [slot] : []) : cfg.slots).forEach(s => {
+            const b = dayRecords.filter(r => r.project===cfg.name && r.slot===s).length;
+            total += cfg.capacity; booked += b; const r = cfg.capacity - b;
+            slotRows += `<tr><td>${s}</td><td>${b}/${cfg.capacity}</td><td>${r}</td><td><span class="status ${r<=0?'st-full':'st-ok'}">${r<=0?'已满':'可约'}</span></td></tr>`;
+        });
+        const pct = total>0?(booked/total*100):0;
+        html += `<div class="stat-card"><div class="stat-header"><span class="stat-title">${cfg.name}</span><span class="stat-badge ${booked>=total?'badge-full':'badge-ok'}">${booked>=total?'已满':'可约'}</span></div><div class="stat-nums"><div class="stat-num"><div class="stat-val">${total}</div><div class="stat-lbl">总额</div></div><div class="stat-num"><div class="stat-val" style="color:var(--danger);">${booked}</div><div class="stat-lbl">已约</div></div></div><div class="progress"><div class="progress-bar ${pct>=80?'prog-high':'prog-low'}" style="width:${pct}%"></div></div><table class="slot-tbl"><thead><tr><th>时段</th><th>已约</th><th>余</th><th>状态</th></tr></thead><tbody>${slotRows}</tbody></table></div>`;
+    });
+    div.innerHTML = html;
+}
+document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
+
+// ==================== 记录管理 (含点击复制功能 + 隐私保护 + 表格精简) ====================
+
+// 🟢 切换显示/隐藏手机号
+function togglePhoneMask() {
+    isPhoneRevealed = !isPhoneRevealed;
+    const btn = document.getElementById('btnPhoneToggle');
+    if(isPhoneRevealed) {
+        btn.textContent = '👀 已显示手机号';
+        btn.className = 'btn btn-purple';
+    } else {
+        btn.textContent = '🙈 已隐藏手机号';
+        btn.className = 'btn btn-secondary';
+    }
+    loadRecords();
+}
+
+// 🟢 获取显示用的手机号 (处理隐私)
+function getDisplayPhone(phone, status) {
+    if (!phone) return '-';
+    // 1. 最高权限：只有 "超级管理员" 且 "开关打开" 时，才无视状态显示所有号码
+    if (currentUser && currentUser.role === 'superadmin' && isPhoneRevealed) {
+        return phone;
+    }
+    // 2. 业务需求：预约未完成（待确认）时，所有管理员/预约员都需要看号码联系客户
+    if (status === 'confirmed') {
+        return phone;
+    }
+    // 3. 隐私保护：其他情况（预约成功、已取消），全部隐藏中间4位
+    return String(phone).replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
+}
+
+async function loadRecords() {
+    const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
+    if(document.getElementById('recProject').options.length <= 1) {
+        const cfgs = await VikaDB.getConfigs();
+        document.getElementById('recProject').innerHTML = '<option value="">全部</option>';
+        cfgs.forEach(c => document.getElementById('recProject').innerHTML += `<option value="${c.name}">${c.name}</option>`);
+    }
+    let list = await VikaDB.getRecords({ 
+        start: document.getElementById('recStart').value, 
+        end: document.getElementById('recEnd').value, 
+        createStart: document.getElementById('createStart').value,
+        createEnd: document.getElementById('createEnd').value,
+        project: document.getElementById('recProject').value,
+        status: document.getElementById('recStatus').value
+    });
+    
+    // 🟢 修复点：预约人员只能看自己（兼容用户名和姓名）
+    if (currentUser.role === 'operator') {
+        list = list.filter(r => r.createdBy === currentUser.username || r.createdBy === currentUser.name);
+    }
+    
+    const stats = {
+        total: list.length,
+        pending: list.filter(r => r.status === 'confirmed').length,
+        success: list.filter(r => r.status === 'success').length,
+        cancelled: list.filter(r => r.status === 'cancelled').length
+    };
+    document.getElementById('recOverview').innerHTML = `
+        <div class="overview-card"><div class="overview-val">${stats.total}</div><div class="overview-lbl">总记录</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:#1890ff">${stats.pending}</div><div class="overview-lbl">待确认</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:var(--success)">${stats.success}</div><div class="overview-lbl">预约成功</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:var(--text2)">${stats.cancelled}</div><div class="overview-lbl">已取消</div></div>
+    `;
+    document.getElementById('recSubtitle').textContent = `共 ${list.length} 条记录`;
+    
+    if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
+    
+    // 🟢 精简表格：去掉“预约人”列，将“创建人”改名为“预约人”
+    let html = `<table class="data-tbl"><thead><tr>
+        <th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th>
+        <th>顾客 (点击复制)</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th>
+        <th style="min-width:150px">备注 (点击复制/修改)</th>
+        <th>预约人</th><th>创建时间</th><th>状态</th><th>操作</th>
+        </tr></thead><tbody>`;
+        
+    list.forEach(r => {
+        const sc = {confirmed:'st-pending',success:'st-success',cancelled:'st-cancel'}[r.status]||'';
+        const stCn = STATUS_MAP[r.status] || r.status;
+        const createTime = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {hour12:false}) : '-';
+        let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
+        if(currentUser.role !== 'operator') btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
+        
+        // 🟢 处理电话显示
+        const displayPhone = getDisplayPhone(r.phone, r.status);
+
+        html += `<tr data-id="${r.id}">
+            <td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td>
+            <td class="copy-cell" onclick="copyText('${r.name}')">${r.name}</td>
+            <td class="copy-cell" onclick="copyText('${displayPhone}')">${displayPhone}</td>
+            <td class="copy-cell" onclick="copyText('${r.project}')">${r.project}</td>
+            <td>${r.date}</td><td>${r.slot}</td>
+            <td class="copy-cell" onclick="if(event.target.tagName!=='INPUT') copyText('${r.remark||'-'}')">
+                <input type="text" class="form-control" style="padding:4px 8px; height:auto; font-size:0.85rem;" value="${r.remark||''}" onblur="saveRemark('${r.id}', this.value)" placeholder="无">
+            </td>
+            <!-- 🟢 修改：这里显示 createdBy (即预约人姓名) -->
+            <td class="copy-cell" onclick="copyText('${r.createdBy||'-'}')">${r.createdBy||'-'}</td>
+            <td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td>
+            <td><div class="btn-group">${btns}</div></td>
+        </tr>`;
+    });
+    tbl.innerHTML = html + '</tbody></table>';
+}
+async function saveRemark(id, val) { try { await VikaDB.updateRecordRemark(id, val); } catch(e) { alert('备注保存失败: ' + e.message); } }
+function toggleAllCb(master) { document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; }); }
+
+// 🟢 修改点：直接确认，无弹窗
+async function confirmRec(id) { 
+    // 直接发送请求
+    await VikaDB.updateRecordStatus(id, 'success', {}); 
+    loadRecords(); 
+    showToast('已确认成功'); 
+}
+
+async function cancelRec(id) { if(confirm('取消此预约？')) { await VikaDB.updateRecordStatus(id, 'cancelled', {}); loadRecords(); } }
+function deleteRec(id) { requireSuperPwd(async () => { await VikaDB.deleteRecord(id); loadRecords(); }); }
+function batchDelete() { const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value); if(!ids.length) return alert('请选择'); requireSuperPwd(async () => { await VikaDB.batchDeleteRecords(ids); loadRecords(); }); }
+async function exportExcel() {
+    if(typeof XLSX === 'undefined') return alert('组件加载中，请稍后重试');
+    const list = await VikaDB.getRecords({ 
+        start: document.getElementById('recStart').value, 
+        end: document.getElementById('recEnd').value, 
+        createStart: document.getElementById('createStart').value,
+        createEnd: document.getElementById('createEnd').value,
+        project: document.getElementById('recProject').value,
+        status: document.getElementById('recStatus').value
+    });
+    if(!list.length) return alert('当前没有数据可导出');
+    const data = list.map((r,i) => ({ 
+        '序号': i+1, '姓名': r.name, '电话': r.phone||'', '项目': r.project, '日期': r.date, '时段': r.slot,
+        '预约人': r.createdBy||'', // 🟢 导出时，预约人取 createdBy
+        '备注': r.remark||'', 
+        '状态': STATUS_MAP[r.status]||r.status,
+        '创建时间': r.createdAt ? new Date(r.createdAt).toLocaleString() : ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '预约记录'); XLSX.writeFile(wb, '预约数据.xlsx');
+}
+
+// ==================== 🟢 增强的项目配置管理 ====================
+async function loadCfgTable() {
+    const list = await VikaDB.getConfigs();
+    let html = `<table class="data-tbl"><thead><tr><th>排序</th><th>项目</th><th>天数</th><th>排除日期</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody id="cfgTbody">`;
+    list.forEach((c, index) => {
+        const first = index === 0;
+        const last = index === list.length - 1;
+        const excludeStr = c.excludedDates.length ? `<span title="${c.excludedDates.join(', ')}">${c.excludedDates.length}天</span>` : '-';
+        
+        html += `<tr class="draggable-row" data-id="${c.id}">
+            <td><span class="sort-handle">☰</span></td>
+            <td><strong>${c.name}</strong></td>
+            <td>${c.days}</td>
+            <td>${excludeStr}</td>
+            <td>${c.capacity}</td>
+            <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.slots.join(',')}">${c.slots.join(', ')}</td>
+            <td><div class="btn-group">
+                <button class="btn btn-info btn-sm" onclick="moveCfg('${c.id}', -1)" ${first?'disabled':''}>⬆️</button>
+                <button class="btn btn-info btn-sm" onclick="moveCfg('${c.id}', 1)" ${last?'disabled':''}>⬇️</button>
+                <button class="btn btn-primary btn-sm" onclick="editCfg('${c.id}')">编辑</button>
+                <button class="btn btn-danger btn-sm" onclick="delCfg('${c.id}')">删除</button>
+            </div></td>
+        </tr>`
+    });
+    const tbl = document.getElementById('cfgTable');
+    tbl.innerHTML = html + '</tbody></table>';
+    
+    // 初始化拖拽排序
+    const tbody = document.getElementById('cfgTbody');
+    if(tbody) {
+        new Sortable(tbody, {
+            handle: '.sort-handle',
+            animation: 150,
+            onEnd: function() { saveOrder(); }
+        });
+    }
+}
+
+async function saveOrder() {
+    const rows = document.querySelectorAll('#cfgTbody tr');
+    const title = document.querySelector('#page-config h2');
+    const oldText = title.textContent;
+    title.textContent = '⚙️ 正在保存顺序...';
+    title.style.color = 'var(--warning)';
+
+    try {
+        const updates = [];
+        for (let i = 0; i < rows.length; i++) {
+            const id = rows[i].getAttribute('data-id');
+            updates.push({ recordId: id, fields: { sort: i } });
+        }
+        const chunkSize = 10;
+        for (let i = 0; i < updates.length; i += chunkSize) {
+            const chunk = updates.slice(i, i + chunkSize);
+            await VikaDB.batchUpdate(DST_CONFIGS, chunk);
+        }
+    } catch (e) {
+        alert('保存顺序失败：' + e.message); 
+    } finally {
+        title.textContent = oldText;
+        title.style.color = 'var(--primary)';
+        loadCfgTable();
+    }
+}
+
+function moveCfg(id, dir) {
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    const tbody = document.getElementById('cfgTbody');
+    if (dir === -1 && row.previousElementSibling) {
+        tbody.insertBefore(row, row.previousElementSibling);
+    } else if (dir === 1 && row.nextElementSibling) {
+        tbody.insertBefore(row.nextElementSibling, row);
+    }
+    saveOrder();
+}
+
+async function editCfg(id) { const cfgs = await VikaDB.getConfigs(); openCfgModal(cfgs.find(c => c.id === id)); }
+
+// 🟢 修改点：打开配置模态框，初始化黑名单和时段
+function openCfgModal(cfg) { 
+    document.getElementById('cfgId').value = cfg ? cfg.id : ''; 
+    document.getElementById('cfgName').value = cfg ? cfg.name : ''; 
+    document.getElementById('cfgDays').value = cfg ? cfg.days : ''; 
+    document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; 
+    
+    currentExcludedDates = cfg ? (cfg.excludedDates || []) : [];
+    renderExcludeTags();
+    document.getElementById('cfgExcludeInput').value = '';
+
+    const container = document.getElementById('cfgSlots');
+    container.innerHTML = '';
+    const currentSlots = cfg ? cfg.slots : [];
+    
+    const startHour = 9;
+    const endHour = 20;
+    
+    for (let i = startHour; i < endHour; i++) {
+        const timeStr = `${String(i).padStart(2,'0')}:00-${String(i+1).padStart(2,'0')}:00`;
+        const isSelected = currentSlots.includes(timeStr);
+        
+        const div = document.createElement('div');
+        div.className = 'slot-cfg-item';
+        div.innerHTML = `
+            <span class="slot-cfg-label">${timeStr}</span>
+            <div class="slot-cfg-opts">
+                <label class="slot-radio">
+                    <input type="radio" name="slot_${i}" value="1" ${isSelected ? 'checked' : ''}>
+                    <span>✅ 可约</span>
+                </label>
+                <label class="slot-radio" style="color:#999">
+                    <input type="radio" name="slot_${i}" value="0" ${!isSelected ? 'checked' : ''}>
+                    <span>⛔ 排除</span>
+                </label>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    document.getElementById('cfgModal').classList.add('show'); 
+}
+
+// 🟢 新增：黑名单管理辅助函数
+function renderExcludeTags() {
+    const box = document.getElementById('cfgExcludeList');
+    box.innerHTML = '';
+    currentExcludedDates.sort().forEach(dt => {
+        const tag = document.createElement('div');
+        tag.className = 'exclude-tag';
+        tag.innerHTML = `${dt} <span onclick="removeExcludeDate('${dt}')">✕</span>`;
+        box.appendChild(tag);
+    });
+}
+function addExcludeDate() {
+    const input = document.getElementById('cfgExcludeInput');
+    const val = input.value;
+    if (!val) return alert('请先选择日期');
+    if (currentExcludedDates.includes(val)) return alert('该日期已在排除列表中');
+    currentExcludedDates.push(val);
+    renderExcludeTags();
+    input.value = ''; 
+}
+function removeExcludeDate(dt) {
+    currentExcludedDates = currentExcludedDates.filter(d => d !== dt);
+    renderExcludeTags();
+}
+
+async function saveCfg(e) { 
+    e.preventDefault(); 
+    const slots = []; 
+    const startHour = 9; 
+    const endHour = 20;
+    for (let i = startHour; i < endHour; i++) {
+        const radios = document.getElementsByName(`slot_${i}`);
+        for(let r of radios) {
+            if(r.checked && r.value === '1') {
+                slots.push(`${String(i).padStart(2,'0')}:00-${String(i+1).padStart(2,'0')}:00`);
+            }
+        }
+    }
+    
+    const cfg = { 
+        id: document.getElementById('cfgId').value, 
+        name: document.getElementById('cfgName').value, 
+        days: parseInt(document.getElementById('cfgDays').value), 
+        capacity: parseInt(document.getElementById('cfgCap').value), 
+        slots: slots.sort(),
+        excludedDates: currentExcludedDates
+    };
+    await VikaDB.saveConfig(cfg); 
+    hideModal('cfgModal'); loadCfgTable(); 
+}
+
+async function delCfg(id) { if(confirm('确定删除？')) { await VikaDB.deleteConfig(id); loadCfgTable(); } }
+
+// 🟢 用户管理列表 (包含部门、搜索)
+async function loadUserTable() {
+    let list = await VikaDB.getUsers();
+    
+    // 搜索过滤逻辑
+    const keyword = document.getElementById('userSearch').value.trim().toLowerCase();
+    if(keyword) {
+        list = list.filter(u => 
+            (u.username && u.username.toLowerCase().includes(keyword)) ||
+            (u.name && u.name.toLowerCase().includes(keyword)) ||
+            (u.department && u.department.toLowerCase().includes(keyword))
+        );
+    }
+
+    const isSuper = currentUser.role === 'superadmin';
+    let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>部门</th>${isSuper?'<th>密码</th>':''}<th>角色</th><th>操作</th></tr></thead><tbody>`;
+    list.forEach(u => html += `<tr><td>${u.username}</td><td>${u.name}</td><td>${u.department||'-'}</td>${isSuper?`<td>${u.password||''}</td>`:''}<td>${{superadmin:'超级管理员',admin:'管理员',operator:'预约人员'}[u.role]}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">删除</button></div></td></tr>`);
+    document.getElementById('userTable').innerHTML = html + '</tbody></table>';
+}
+async function editUser(id) { const users = await VikaDB.getUsers(); openUserModal(users.find(u => u.id === id)); }
+function openUserModal(u) { 
+    document.getElementById('userId').value = u ? u.id : ''; 
+    document.getElementById('userUsername').value = u ? u.username : ''; 
+    document.getElementById('userName').value = u ? u.name : ''; 
+    document.getElementById('userRole').value = u ? u.role : 'operator'; 
+    document.getElementById('userDept').value = u ? u.department || '' : ''; // 填充部门
+    document.getElementById('userModal').classList.add('show'); 
+}
+
+// 🟢 保存用户（含用户名唯一性校验）
+async function saveUser(e) { 
+    e.preventDefault(); 
+    
+    const id = document.getElementById('userId').value;
+    const username = document.getElementById('userUsername').value.trim();
+    const name = document.getElementById('userName').value.trim();
+    const role = document.getElementById('userRole').value;
+    const dept = document.getElementById('userDept').value.trim();
+    const pwd = document.getElementById('userPwd').value;
+    
+    // 唯一性检查
+    const users = await VikaDB.getUsers();
+    // 查找是否存在 同名 但 ID不同 的用户
+    const exists = users.find(u => u.username === username && u.id !== id);
+    if(exists) {
+        alert('❌ 用户名已存在，请更换！');
+        return;
+    }
+
+    await VikaDB.saveUser({ 
+        id: id, 
+        username: username, 
+        name: name, 
+        password: pwd, 
+        role: role,
+        department: dept // 保存部门
+    }); 
+    
+    hideModal('userModal'); 
+    loadUserTable(); 
+}
+
+async function deleteUser(id) { if(confirm('确定删除？')) { await VikaDB.deleteUser(id); loadUserTable(); } }
+function requireSuperPwd(cb) { superPwdCallback = cb; document.getElementById('superPwdInput').value=''; document.getElementById('superPwdModal').classList.add('show'); }
+async function verifySuperPwd(e) { e.preventDefault(); const users = await VikaDB.getUsers(); if(users.some(u => u.role==='superadmin' && u.password===document.getElementById('superPwdInput').value)) { hideModal('superPwdModal'); if(superPwdCallback) superPwdCallback(); } else alert('错误'); }
+function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+function initShare() { const base = location.href.split('?')[0]; document.getElementById('userLink').value = base; document.getElementById('qrcode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(base)}" alt="QR">`; }
+function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制'); }
+function downloadConfigTemplate() { if(typeof XLSX === 'undefined') return alert('组件加载中'); const data = [{ '项目名称': '示例项目', '可约天数': 7, '时段容量': 5, '时段列表': '09:00-10:00, 10:00-11:00' }]; const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '项目模板'); XLSX.writeFile(wb, '项目配置导入模板.xlsx'); }
+function downloadUserTemplate() { if(typeof XLSX === 'undefined') return alert('组件加载中'); const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }]; const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '用户模板'); XLSX.writeFile(wb, '用户导入模板.xlsx'); }
+
+// 🟢 修复版：导入配置 (增加延时)
+function importConfigs(e) { 
+    const file = e.target.files[0]; 
+    if (!file) return; 
+    
+    const reader = new FileReader(); 
+    reader.onload = async function(ev) { 
+        try { 
+            const wb = XLSX.read(ev.target.result, { type: 'array' }); 
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
+            
+            let count = 0; 
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
+            const orgText = btn.textContent;
+            btn.textContent = '导入中...';
+            btn.disabled = true;
+
+            for (let row of data) { 
+                const slots = (row['时段列表']||'').split(/[,，]/).map(s=>s.trim()).filter(s=>s); 
+                await VikaDB.saveConfig({ name: row['项目名称'], days: row['可约天数'], capacity: row['时段容量'], slots: slots, excludedDates: [] }); 
+                count++; 
+                await new Promise(r => setTimeout(r, 600));
+            } 
+            alert(`✅ 已成功导入 ${count} 个配置`); 
+            loadCfgTable(); 
+            btn.textContent = orgText;
+            btn.disabled = false;
+        } catch (err) { 
+            alert('❌ 导入中断：' + err.message); 
+            loadCfgTable();
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
+            if(btn) { btn.textContent = '📤 导入项目配置'; btn.disabled = false; }
+        } 
+    }; 
+    reader.readAsArrayBuffer(file); 
+    e.target.value = ''; 
+}
+
+// 🟢 修复版：导入用户 (增加延时)
+function importUsers(e) { 
+    const file = e.target.files[0]; 
+    if (!file) return; 
+    
+    const reader = new FileReader(); 
+    reader.onload = async function(ev) { 
+        try { 
+            const wb = XLSX.read(ev.target.result, { type: 'array' }); 
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
+            
+            let count = 0; 
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileUserImport\').click()"]');
+            const orgText = btn.textContent;
+            btn.textContent = '导入中...';
+            btn.disabled = true;
+
+            for (let row of data) { 
+                const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' }; 
+                const roleCode = roleMap[row['角色']] || 'operator'; 
+                await VikaDB.saveUser({ username: row['用户名'], name: row['姓名'], password: String(row['密码']), role: roleCode }); 
+                count++; 
+                await new Promise(r => setTimeout(r, 600));
+            } 
+            alert(`✅ 已成功导入 ${count} 个用户`); 
+            loadUserTable(); 
+            btn.textContent = orgText;
+            btn.disabled = false;
+        } catch (err) { 
+            alert('❌ 导入中断：' + err.message); 
+            loadUserTable();
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileUserImport\').click()"]');
+            if(btn) { btn.textContent = '📤 导入用户'; btn.disabled = false; }
+        } 
+    }; 
+    reader.readAsArrayBuffer(file); 
+    e.target.value = ''; 
+}
+
+document.addEventListener('DOMContentLoaded', checkSession);
+</script>
+</body>
+</html>
